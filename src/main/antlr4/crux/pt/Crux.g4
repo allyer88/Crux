@@ -12,11 +12,12 @@ decl
  | arrayDecl
  | functionDefn
  ;
- literal
-  : Integer
-  | True
-  | False
-  ;
+
+literal
+ : Integer
+ | True
+ | False
+ ;
 
 //Example) int a;
 varDecl
@@ -29,7 +30,7 @@ type
 
 //Example) int arr[10];
 arrayDecl
- : type Identifier OpenBracket literal CloseBracket SemiColon
+ : type Identifier OpenBracket Integer CloseBracket SemiColon
  ;
 
 //Example) parameters add(int a, int b)
@@ -136,15 +137,12 @@ expr3
  | OpenParen expr0 CloseParen
  | designator
  | callExpr
- | literal;
+ | literal
+ ;
 
 Integer
  : '0'
  | [1-9] [0-9]*
- ;
-
-Identifier
- : [a-zA-Z] [a-zA-Z0-9_]*
  ;
 
 WhiteSpaces
@@ -188,5 +186,9 @@ Comment
  Assign: '=';
  Comma: ',';
  SemiColon: ';';
+ //order matters, put Identifier after other lexer tokens
+ Identifier
+  : [a-zA-Z] [a-zA-Z0-9_]*
+  ;
 
 
