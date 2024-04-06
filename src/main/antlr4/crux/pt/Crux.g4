@@ -32,8 +32,6 @@ Integer
  | [1-9] [0-9]*
  ;
 
-
-
 Identifier
  : [a-zA-Z] [a-zA-Z0-9_]*
  ;
@@ -68,7 +66,7 @@ Comment
  Sub: '-';
  Mul: '*';
  Div: '/';
- GreatEqual: '>=';
+ GreaterEqual: '>=';
  LesserEqual: '<=';
  NotEqual: '!=';
  Equal: '==';
