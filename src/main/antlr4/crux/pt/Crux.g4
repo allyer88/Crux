@@ -9,22 +9,88 @@ declList
 
 decl
  : varDecl
-// | arrayDecl
-// | functionDefn
+ | arrayDecl
+ | functionDefn
  ;
+ literal
+  : Integer
+  | True
+  | False
+  ;
 
+//Example) int a;
 varDecl
  : type Identifier ';'
  ;
 
 type
- : Identifier
+  : Identifier
+  ;
+
+//Example) int arr[10];
+arrayDecl
+ : type Identifier OpenBracket literal CloseBracket SemiColon
  ;
 
-literal
- : Integer
- | True
- | False
+//Example) parameters add(int a, int b)
+param
+ : type Identifier
+ ;
+paramList
+ : (param (Comma param)*)?
+ ;
+//Example void foo(){} | void foo(int a){}
+functionDefn
+ : type Identifier OpenParen paramList CloseParen stmtBlock
+ ;
+
+//Example) a = 10;
+assignStmt
+ : designator Assign expr0 SemiColon
+ ;
+
+//Example) Add() | Add(1,2) | Add(1,2,3,4,5)
+callExpr
+ : Identifier OpenParen exprList CloseParen
+ ;
+exprList
+ : (expr0 (Comma expr0)*)?
+ ;
+callStmt
+ : callExpr SemiColon
+ ;
+ifStmt
+ : If expr0 stmtBlock (Else stmtBlock)?
+ ;
+
+loopStmt
+ : Loop stmtBlock
+ ;
+breakStmt
+ : Break SemiColon
+ ;
+continueStmt
+ : Continue SemiColon
+ ;
+returnStmt
+ : Return expr0 SemiColon
+ ;
+stmt
+ : varDecl
+ | callStmt
+ | assignStmt
+ | ifStmt
+ | loopStmt
+ | breakStmt
+ | continueStmt
+ | returnStmt
+ ;
+
+stmtList : stmt*;
+
+//{...}
+stmtBlock
+ : OpenBrace stmtList CloseBrace
  ;
 
 //example) arr[i] or arr
@@ -72,15 +138,6 @@ expr3
  | callExpr
  | literal;
 
-//Example Add() | Add(1,2) | Add(1,2,3,4,5)
-callExpr
- : Identifier OpenParen exprList CloseParen
- ;
-
-exprList
- : (expr0 (Comma expr0)*)?
- ;
-
 Integer
  : '0'
  | [1-9] [0-9]*
@@ -109,6 +166,8 @@ Comment
  True: 'true';
  False: 'false';
  Return: 'return';
+ Continue: 'continue';
+ Loop: 'loop';
  //some characters
  OpenParen: '(';
  CloseParen: ')';
