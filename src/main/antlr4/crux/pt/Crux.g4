@@ -27,6 +27,60 @@ literal
  | False
  ;
 
+//example) arr[i] or arr
+designator
+ : Identifier(OpenBracket expr0 CloseBracket)?
+ ;
+
+//">=" | "<=" | "!=" | "==" | ">" | "<"
+op0
+ : GreaterEqual
+ | LesserEqual
+ | NotEqual
+ | Equal
+ | GreaterThan
+ | LessThan
+ ;
+
+//"+" | "-" | "||"
+op1
+ : Add
+ | Sub
+ | Or
+ ;
+
+//"*" | "/" | "&&"
+op2
+ : Mul
+ | Div
+ | And
+ ;
+
+expr0
+ : expr1(op0 expr1)?
+ ;
+expr1
+ : expr2
+ | expr1 op1 expr2;
+expr2
+ : expr3
+ | expr2 op2 expr3;
+expr3
+ : Not expr3
+ | OpenParen expr0 CloseParen
+ | designator
+ | callExpr
+ | literal;
+
+//Example Add() | Add(1,2) | Add(1,2,3,4,5)
+callExpr
+ : Identifier OpenParen exprList CloseParen
+ ;
+
+exprList
+ : (expr0 (Comma expr0)*)?
+ ;
+
 Integer
  : '0'
  | [1-9] [0-9]*
@@ -57,11 +111,11 @@ Comment
  Return: 'return';
  //some characters
  OpenParen: '(';
- Close_paren: ')';
+ CloseParen: ')';
  OpenBrace: '{';
  CloseBrace: '}';
  OpenBracket: '[';
- CoseBracket: ']';
+ CloseBracket: ']';
  Add: '+';
  Sub: '-';
  Mul: '*';
