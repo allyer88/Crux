@@ -9,6 +9,7 @@ import crux.pt.CruxParser.StmtContext;
 import crux.pt.CruxParser.Op0Context;
 import crux.pt.CruxParser.Op1Context;
 import crux.pt.CruxParser.Op2Context;
+import crux.pt.CruxParser.ParamContext;
 import crux.ast.types.*;
 import crux.ast.SymbolTable.Symbol;
 import org.antlr.v4.runtime.ParserRuleContext;
@@ -81,7 +82,6 @@ public final class ParseTreeLower {
     }
 
     return new StatementList(makePosition(stmtList), list);
-
   }
 
 
@@ -90,7 +90,12 @@ public final class ParseTreeLower {
    *
    * @return a {@link StmtList} AST object.
    */
-  // private StatementList lower(CruxParser.StmtBlockContext stmtBlock) { }
+  private StatementList lower(CruxParser.StmtBlockContext stmtBlock) {
+    symTab.enter();
+    StatementList list = lower(stmtBlock.stmtList());
+    symTab.exit();
+    return list;
+  }
 
   /**
    * A parse tree visitor to create AST nodes derived from {@link Declaration}
@@ -101,11 +106,21 @@ public final class ParseTreeLower {
      *
      * @return an AST {@link VariableDeclaration}
      */
+    //get the type of variable
+    private Type getType(String stype){
+      if(stype.equals("int")) return new IntType();
+      if(stype.equals("bool")) return new BoolType();
+      return new ErrorType("No such type");
+    }
+     //@Override
+     public VariableDeclaration visitVarDecl(CruxParser.VarDeclContext ctx) {
+        String name = ctx.Identifier().getText();
+        String stype = ctx.type().Identifier().getText();
+        Type type = getType(stype);
+        Symbol symbol = symTab.add(makePosition(ctx), name, type);
+       return new VariableDeclaration(makePosition(ctx), symbol);
+     }
 
-    /*
-     * @Override
-     * public VariableDeclaration visitVarDecl(CruxParser.VarDeclContext ctx) { }
-     */
 
 
     /**
@@ -113,10 +128,17 @@ public final class ParseTreeLower {
      *
      * @return an AST {@link ArrayDeclaration}
      */
-    /*
-     *    @Override
-     * public Declaration visitArrayDecl(CruxParser.ArrayDeclContext ctx) { }
-     */
+    //@Override
+     public Declaration visitArrayDecl(CruxParser.ArrayDeclContext ctx) {
+        String name = ctx.Identifier().getText();
+        String stype = ctx.type().Identifier().getText();
+        Type baseType = getType(stype);
+        long i = Integer.parseInt(ctx.Integer().getText());
+        Type type = new ArrayType(i, baseType);
+        Symbol symbol = symTab.add(makePosition(ctx), name, type);
+        return new ArrayDeclaration(makePosition(ctx), symbol);
+     }
+
 
 
     /**
@@ -124,10 +146,29 @@ public final class ParseTreeLower {
      *
      * @return an AST {@link FunctionDefinition}
      */
-    /*
-     *    @Override
-     * public Declaration visitFunctionDefn(CruxParser.FunctionDefnContext ctx) { }
-     */
+
+    //@Override
+     public Declaration visitFunctionDefn(CruxParser.FunctionDefnContext ctx) {
+       //add function to symtable
+       String name = ctx.Identifier().getText();
+       String stype = ctx.type().Identifier().getText();
+       Type returnType = getType(stype);
+       //add para to symtable
+       List<Type> paraTypes = new ArrayList<>();
+       List<Symbol> parameters =  new ArrayList<>();
+       for(ParamContext para:ctx.paramList().param()){
+         String sparatype = para.type().Identifier().getText();
+         Type paraType = getType(sparatype);
+         paraTypes.add(paraType);
+         String paraName = para.Identifier().getText();
+         Symbol symbol=new Symbol(paraName, paraTypes);
+       }
+
+       Type type = new FuncType(new TypeList(paraTypes), returnType);
+       Symbol symbol = symTab.add(makePosition(ctx), name, type);
+       return FunctionDefinition(makePosition(ctx), symbol);
+     }
+
   }
 
 
