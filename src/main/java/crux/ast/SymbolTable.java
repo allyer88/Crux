@@ -84,7 +84,7 @@ public final class SymbolTable {
 
   SymbolTable(PrintStream err) {
     this.err = err;
-    //TODO
+    this.symbolScopes.add(new HashMap<String, Symbol>()); //Global Scope
   }
 
   boolean hasEncounteredError() {
@@ -96,7 +96,7 @@ public final class SymbolTable {
    */
 
   void enter() {
-    //TODO
+    this.symbolScopes.add(new HashMap<String, Symbol>());
   }
 
   /**
@@ -104,16 +104,25 @@ public final class SymbolTable {
    */
 
   void exit() {
-    //TODO
+    this.symbolScopes.remove(symbolScopes.size()-1);
   }
 
   /**
    * Insert a symbol to the table at the most recent scope. if the name already exists in the
-   * current scope that's a declareation error.
+   * current scope that's a declaration error.
    */
   Symbol add(Position pos, String name, Type type) {
-    //TODO
-    return null;
+    //get the most recent scope
+    Map<String, Symbol> mapAtIndex = symbolScopes.get(symbolScopes.size() - 1);
+    if (mapAtIndex.containsKey(name)) {
+      err.printf("DeclarationError%s[%s already exists.]%n", pos, name);
+      encounteredError = true;
+      return new Symbol(name, "declarationError");
+    } else {
+      Symbol s = new Symbol(name, type);
+      mapAtIndex.put(name, s);
+      return s;
+    }
   }
 
   /**
@@ -135,7 +144,12 @@ public final class SymbolTable {
    * Try to find a symbol in the table starting form the most recent scope.
    */
   private Symbol find(String name) {
-    //TODO
+    //starting form the most recent scope.
+    for(int i=symbolScopes.size()-1;i>=0;i--){
+      if(symbolScopes.get(i).containsKey(name))
+        return symbolScopes.get(i).get(name);
+    }
+    //name not found
     return null;
   }
 }
