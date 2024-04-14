@@ -84,7 +84,15 @@ public final class SymbolTable {
 
   SymbolTable(PrintStream err) {
     this.err = err;
-    this.symbolScopes.add(new HashMap<String, Symbol>()); //Global Scope
+    this.symbolScopes.add(new HashMap<>()); //Global Scope
+    //add built-in functions
+    add(null, "readInt", new FuncType(TypeList.of() , new IntType()));
+    add(null, "readChar", new FuncType(TypeList.of(), new IntType()));
+    add(null, "printBool", new FuncType(TypeList.of(new BoolType()), new VoidType()));
+    add(null, "printInt", new FuncType(TypeList.of(new IntType()), new VoidType()));
+    add(null, "printChar", new FuncType(TypeList.of(new IntType()), new VoidType()));
+    add(null, "println", new FuncType(TypeList.of(), new VoidType()));
+
   }
 
   boolean hasEncounteredError() {
