@@ -136,7 +136,7 @@ public final class ParseTreeLower {
         String name = ctx.Identifier().getText();
         String stype = ctx.type().Identifier().getText();
         Type baseType = getType(stype);
-        long i = Integer.parseInt(ctx.Integer().getText());
+        long i = Long.parseLong(ctx.Integer().getText());
         Type type = new ArrayType(i, baseType);
         Symbol symbol = symTab.add(makePosition(ctx), name, type);
         return new ArrayDeclaration(makePosition(ctx), symbol);
@@ -211,7 +211,17 @@ public final class ParseTreeLower {
     //@Override
     public Statement visitAssignStmt(CruxParser.AssignStmtContext ctx) {
       //ctx.designator().getText() is name
-      Symbol symbol = symTab.lookup(makePosition(ctx),ctx.designator().getText());
+      String name = ctx.designator().Identifier().getText();
+      Symbol symbol = symTab.lookup(makePosition(ctx),name);
+      if(ctx.designator().expr0()!=null){
+        //this is array assignment a[10]=10;
+        Expression index = ctx.designator().expr0().accept(exprVisitor);
+        ArrayAccess lhs = new ArrayAccess(makePosition(ctx), symbol, index);
+        Expression rhs = ctx.expr0().accept(exprVisitor);
+        return new Assignment(makePosition(ctx),lhs, rhs);
+      }
+      //this is variable assignment
+      //a=10;
       VarAccess lhs = new VarAccess(makePosition(ctx), symbol);
       Expression rhs = ctx.expr0().accept(exprVisitor);
       return new Assignment(makePosition(ctx),lhs, rhs);
