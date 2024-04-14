@@ -4,6 +4,11 @@ import crux.ast.*;
 import crux.ast.OpExpr.Operation;
 import crux.pt.CruxBaseVisitor;
 import crux.pt.CruxParser;
+import crux.pt.CruxParser.DeclContext;
+import crux.pt.CruxParser.StmtContext;
+import crux.pt.CruxParser.Op0Context;
+import crux.pt.CruxParser.Op1Context;
+import crux.pt.CruxParser.Op2Context;
 import crux.ast.types.*;
 import crux.ast.SymbolTable.Symbol;
 import org.antlr.v4.runtime.ParserRuleContext;
@@ -51,7 +56,14 @@ public final class ParseTreeLower {
    */
 
   public DeclarationList lower(CruxParser.ProgramContext program) {
-    return null;
+    ArrayList<Declaration> list = new ArrayList<Declaration>();
+
+    for(DeclContext context: program.declList().decl()) {
+      Declaration node = context.accept(declVisitor);
+      list.add(node);
+    }
+
+    return new DeclarationList(makePosition(program),list);
   }
 
   /**
@@ -60,7 +72,17 @@ public final class ParseTreeLower {
    * @return a {@link StmtList} AST object.
    */
 
-  // private StatementList lower(CruxParser.StmtListContext stmtList) { }
+  private StatementList lower(CruxParser.StmtListContext stmtList) {
+    ArrayList<Statement> list = new ArrayList<Statement> ();
+
+    for(StmtContext context: stmtList.stmt()) {
+      Statement node = context.accept(stmtVisitor);
+      list.add(node);
+    }
+
+    return new StatementList(makePosition(stmtList), list);
+
+  }
 
 
   /**
@@ -133,20 +155,16 @@ public final class ParseTreeLower {
      *
      * @return an AST {@link Assignment}
      */
-    /*
-     * @Override
-     * public Statement visitAssignStmt(CruxParser.AssignStmtContext ctx) { }
-     */
 
-    /**
-     * Visit a parse tree assignment nosemi stmt and create an AST {@link Assignment}
-     *
-     * @return an AST {@link Assignment}
-     */
-    /*
-     * @Override
-     * public Statement visitAssignStmtNoSemi(CruxParser.AssignStmtNoSemiContext ctx) { }
-     */
+    //@Override
+    public Statement visitAssignStmt(CruxParser.AssignStmtContext ctx) {
+      //ctx.designator().getText() is name
+      Symbol symbol = symTab.lookup(makePosition(ctx),ctx.designator().getText());
+      VarAccess lhs = new VarAccess(makePosition(ctx), symbol);
+      Expression rhs = ctx.expr0().accept(exprVisitor);
+      return new Assignment(makePosition(ctx),lhs, rhs);
+    }
+
 
     /**
      * Visit a parse tree call stmt and create an AST {@link Call}. Since {@link Call} is both
@@ -209,21 +227,81 @@ public final class ParseTreeLower {
     /**
      * Parse Expr0 to OpExpr Node Parsing the expr should be exactly as described in the grammer
      */
+    //to get the operation0
+    private Operation getOp0(Op0Context op){
+      if(op.GreaterEqual() != null) return Operation.GE;
+      if(op.LesserEqual() != null) return Operation.LE;
+      if(op.NotEqual() != null) return Operation.NE;
+      if(op.Equal() != null) return Operation.EQ;
+      if(op.GreaterThan() != null) return Operation.GT;
+      return Operation.LT;
+    }
     // @Override
-    //public Expression visitExpr0(CruxParser.Expr0Context ctx) {}
+    public Expression visitExpr0(CruxParser.Expr0Context ctx) {
+      //TODO: WHAT i to pass for expr1?
+      //handle ">=" | "<=" | "!=" | "==" | ">" | "<"
+      if (ctx.op0() == null) {
+        //expr1 case
+        return ctx.expr1(0).accept(exprVisitor);
+      } else {
+        //expr1 op0 expr1 case
+        Expression lhs = ctx.expr1(0).accept(exprVisitor);
+        Expression rhs = ctx.expr1(0).accept(exprVisitor);
+        Op0Context op0 = ctx.op0();
+        Operation op = getOp0(op0);
+        return new OpExpr(makePosition(ctx), op, lhs, rhs);
+      }
+
+    }
 
     /**
      * Parse Expr1 to OpExpr Node Parsing the expr should be exactly as described in the grammer
      */
+    private Operation getOp1(Op1Context op){
+      if(op.Add() != null) return Operation.ADD;
+      if(op.Sub() != null) return Operation.SUB;
+      return Operation.LOGIC_OR;
+    }
     //@Override
-    //public Expression visitExpr1(CruxParser.Expr1Context ctx) {}
+    public Expression visitExpr1(CruxParser.Expr1Context ctx) {
+      //handle "+" | "-" | "||"
+      if (ctx.op1() == null) {
+        //expr2 case
+        return ctx.expr2().accept(exprVisitor);
+      } else {
+        //expr1 op1 expr2 case
+        Expression lhs = ctx.expr1().accept(exprVisitor);
+        Expression rhs = ctx.expr2().accept(exprVisitor);
+        Op1Context op1 = ctx.op1();
+        Operation op = getOp1(op1);
+        return new OpExpr(makePosition(ctx), op, lhs, rhs);
+      }
+    }
 
 
     /**
      * Parse Expr2 to OpExpr Node Parsing the expr should be exactly as described in the grammer
      */
+    private Operation getOp2(Op2Context op){
+      if(op.Mul() != null) return Operation.MULT;
+      if(op.Div() != null) return Operation.DIV;
+      return Operation.LOGIC_AND;
+    }
     //@Override
-    //public Expression visitExpr2(CruxParser.Expr2Context ctx) {}
+    public Expression visitExpr2(CruxParser.Expr2Context ctx) {
+      //handle //"*" | "/" | "&&"
+      if (ctx.op2() == null) {
+        //expr3 case
+        return ctx.expr3().accept(exprVisitor);
+      } else {
+        //expr2 op2 expr3 case
+        Expression lhs = ctx.expr2().accept(exprVisitor);
+        Expression rhs = ctx.expr3().accept(exprVisitor);
+        Op2Context op2 = ctx.op2();
+        Operation op = getOp2(op2);
+        return new OpExpr(makePosition(ctx), op, lhs, rhs);
+      }
+    }
 
     /**
      * Parse Expr3 to OpExpr Node Parsing the expr should be exactly as described in the grammer
