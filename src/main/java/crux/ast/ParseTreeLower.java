@@ -81,7 +81,7 @@ public final class ParseTreeLower {
    */
 
   private StatementList lower(CruxParser.StmtListContext stmtList) {
-    ArrayList<Statement> list = new ArrayList<Statement> ();
+    ArrayList<Statement> list = new ArrayList<>();
 
     for(StmtContext context: stmtList.stmt()) {
       Statement node = context.accept(stmtVisitor);
@@ -160,19 +160,23 @@ public final class ParseTreeLower {
        //add para to symtable
        List<Type> paraTypes = new ArrayList<>();
        List<Symbol> parameters =  new ArrayList<>();
+       for(ParamContext para:ctx.paramList().param()) {
+         String sparatype = para.type().Identifier().getText();
+         Type paraType = getType(sparatype);
+         paraTypes.add(paraType);
+       }
+       Type type = new FuncType(new TypeList(paraTypes), returnType);
+       Symbol symbol = symTab.add(makePosition(ctx), name, type);
        symTab.enter();
        for(ParamContext para:ctx.paramList().param()){
          String sparatype = para.type().Identifier().getText();
          Type paraType = getType(sparatype);
-         paraTypes.add(paraType);
          String paraName = para.Identifier().getText();
          Symbol paraSymbol= symTab.add(makePosition(ctx), paraName, paraType);
          parameters.add(paraSymbol);
        }
        StatementList statement = lower(ctx.stmtBlock());
        symTab.exit();
-       Type type = new FuncType(new TypeList(paraTypes), returnType);
-       Symbol symbol = symTab.add(makePosition(ctx), name, type);
 
        return new FunctionDefinition(makePosition(ctx), symbol, parameters,statement);
      }
@@ -266,10 +270,14 @@ public final class ParseTreeLower {
         Expression condition = ctx.expr0().accept(exprVisitor);
         StatementList thenBlock = lower(ctx.stmtBlock(0));
         //else can be null
-        StatementList elseBlock = null;
-        if(ctx.stmtBlock(1)!=null){
-          elseBlock = lower(ctx.stmtBlock(1));
-        }
+       StatementList elseBlock;
+       if(ctx.stmtBlock(1)!=null){
+         elseBlock = lower(ctx.stmtBlock(1));
+       }else{
+         elseBlock = new StatementList(makePosition(ctx), new ArrayList<>() {
+         });
+       }
+
         return new IfElseBranch(makePosition(ctx),condition,thenBlock, elseBlock);
      }
 
