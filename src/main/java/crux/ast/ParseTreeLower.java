@@ -160,6 +160,7 @@ public final class ParseTreeLower {
        //add para to symtable
        List<Type> paraTypes = new ArrayList<>();
        List<Symbol> parameters =  new ArrayList<>();
+       symTab.enter();
        for(ParamContext para:ctx.paramList().param()){
          String sparatype = para.type().Identifier().getText();
          Type paraType = getType(sparatype);
@@ -168,9 +169,11 @@ public final class ParseTreeLower {
          Symbol paraSymbol= symTab.add(makePosition(ctx), paraName, paraType);
          parameters.add(paraSymbol);
        }
+       StatementList statement = lower(ctx.stmtBlock());
+       symTab.exit();
        Type type = new FuncType(new TypeList(paraTypes), returnType);
        Symbol symbol = symTab.add(makePosition(ctx), name, type);
-       StatementList statement = lower(ctx.stmtBlock());
+
        return new FunctionDefinition(makePosition(ctx), symbol, parameters,statement);
      }
 
