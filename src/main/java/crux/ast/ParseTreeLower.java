@@ -2,6 +2,7 @@ package crux.ast;
 
 import crux.ast.*;
 import crux.ast.OpExpr.Operation;
+import crux.ast.traversal.NullNodeVisitor;
 import crux.pt.CruxBaseVisitor;
 import crux.pt.CruxParser;
 import crux.pt.CruxParser.DeclContext;
@@ -418,7 +419,9 @@ public final class ParseTreeLower {
         }else if(ctx.expr0()!=null){
           return ctx.expr0().accept(exprVisitor);
         }else{
-          return ctx.expr3().accept(exprVisitor);
+          Expression lhs =ctx.expr3().accept(exprVisitor);
+          Operation op = Operation.LOGIC_NOT;
+          return new OpExpr(makePosition(ctx),op,lhs , null);
         }
     }
 
@@ -445,7 +448,7 @@ public final class ParseTreeLower {
     public Expression visitDesignator(CruxParser.DesignatorContext ctx) {
       String name = ctx.Identifier().getText();
       Symbol symbol = symTab.lookup(makePosition(ctx),name);
-      //then access array throw index
+      //then access array through index
       if(ctx.expr0()!=null){
         Expression index = ctx.expr0().accept(exprVisitor);
         return new ArrayAccess(makePosition(ctx), symbol, index);
