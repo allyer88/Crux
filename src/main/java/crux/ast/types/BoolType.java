@@ -40,4 +40,13 @@ public final class BoolType extends Type implements java.io.Serializable {
       return new BoolType();
   }
 
+  @Override
+  public Type assign(Type that){
+    if(this.equivalent(that)){
+      return new BoolType();
+    }else{
+      return super.assign(that);
+    }
+  }
+
 }
