@@ -108,7 +108,7 @@ public final class TypeChecker {
       List<Expression> arguments = call.getArguments();
       TypeList typeList = new TypeList();
       //get FuncType
-      Type callee = call.getType();
+      Type callee = call.getCallee().getType();
       //visit arguments and call
       for(Expression exp: arguments){
         exp.accept(this);
@@ -127,7 +127,11 @@ public final class TypeChecker {
     
     @Override
     public Void visit(DeclarationList declarationList) {
-      declarationList.accept(this);
+      List<Node> declarations = declarationList.getChildren();
+      for(Node decl : declarations){
+        Declaration newDecl = (Declaration)decl;
+        newDecl.accept(this);
+      }
       return null;
     }
 
@@ -251,7 +255,11 @@ public final class TypeChecker {
 
     @Override
     public Void visit(StatementList statementList) {
-      statementList.accept(this);
+      List<Node> statements = statementList.getChildren();
+      for(Node stat : statements){
+        Statement newStat = (Statement)stat;
+        newStat.accept(this);
+      }
       return null;
     }
 
