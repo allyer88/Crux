@@ -106,17 +106,18 @@ public final class TypeChecker {
     @Override
     public Void visit(Call call) {
       List<Expression> arguments = call.getArguments();
-      TypeList typeList = new TypeList();
+      //TypeList typeList = new TypeList();
       //get FuncType
-      Type callee = call.getCallee().getType();
+      FuncType callee = (FuncType)call.getCallee().getType();
       //visit arguments and call
       for(Expression exp: arguments){
         exp.accept(this);
         Type expType = getType(exp);
-        Type type = callee.call(expType);
-        typeList.append(type);
+        //Type type = callee.call(expType);
+        callee.call(expType);
+        //typeList.append(expType);
       }
-      setNodeType(call, typeList);
+      setNodeType(call, callee.getRet());
       return null;
     }
 
@@ -180,8 +181,9 @@ public final class TypeChecker {
 
     @Override
     public Void visit(ArrayAccess access) {
-      ArrayType arrayType = (ArrayType) access.getType();
+      ArrayType arrayType = (ArrayType) access.getBase().getType();
       Expression index = access.getIndex();
+      index.accept(this);
       Type indexType = getType(index);
       Type type = arrayType.index(indexType);
       //Set the node type to the result of Type.index().
@@ -214,29 +216,40 @@ public final class TypeChecker {
       Expression right = op.getRight();
       //Get the Types of the expressions.
       left.accept(this);
-      right.accept(this);
       Type leftType = getType(left);
-      Type rightType = getType(right);
+      if(leftType.getClass()== FuncType.class){
+        leftType = ((FuncType) leftType).getRet();
+      }
       Type resulType;
       OpExpr.Operation operation=op.getOp();
-      if(operation== OpExpr.Operation.ADD){
-        resulType = leftType.add(rightType);
-      }else if(operation == OpExpr.Operation.SUB){
-        resulType = leftType.sub(rightType);
-      }else if(operation == OpExpr.Operation.MULT){
-        resulType = leftType.mul(rightType);
-      }else if(operation == OpExpr.Operation.DIV){
-        resulType = leftType.div(rightType);
-      }else if(operation == OpExpr.Operation.LOGIC_AND){
-        resulType = leftType.and(rightType);
-      }else if(operation == OpExpr.Operation.LOGIC_OR){
-        resulType = leftType.or(rightType);
-      }else if(operation == OpExpr.Operation.LOGIC_NOT){
-        resulType = leftType.not();
-      }else { //compare type
-        resulType = leftType.compare(rightType);
+      if(right!=null){
+        right.accept(this);
+        Type rightType = getType(right);
+        if(rightType.getClass()== FuncType.class){
+          rightType = ((FuncType) rightType).getRet();
+        }
+        if(operation== OpExpr.Operation.ADD){
+          resulType = leftType.add(rightType);
+        }else if(operation == OpExpr.Operation.SUB){
+          resulType = leftType.sub(rightType);
+        }else if(operation == OpExpr.Operation.MULT){
+          resulType = leftType.mul(rightType);
+        }else if(operation == OpExpr.Operation.DIV){
+          resulType = leftType.div(rightType);
+        }else if(operation == OpExpr.Operation.LOGIC_AND){
+          resulType = leftType.and(rightType);
+        }else if(operation == OpExpr.Operation.LOGIC_OR){
+          resulType = leftType.or(rightType);
+        }else { //compare type
+          resulType = leftType.compare(rightType);
+        }
+        setNodeType(op, resulType);
+      }else{
+        if(operation == OpExpr.Operation.LOGIC_NOT){
+          resulType = leftType.not();
+          setNodeType(op, resulType);
+        }
       }
-      setNodeType(op, resulType);
       return null;
     }
 
@@ -246,9 +259,13 @@ public final class TypeChecker {
       //Visit Expression.
       value.accept(this);
       Type returnType = getType(value);
+      //if it is void, no need return
+      if(returnType.getClass() == VoidType.class){
+        return null;
+      }
       //Verify expression type is equivalent to currentFunctionReturnType.
       if(returnType.getClass()!=currentFunctionReturnType.getClass()){
-        setNodeType(ret, new ErrorType("Return type is incorrect"));
+        setNodeType(ret, new ErrorType("Return type should be " + currentFunctionReturnType.getClass()+ " not "+returnType.getClass()));
       }
       return null;
     }
