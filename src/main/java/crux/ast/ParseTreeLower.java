@@ -46,6 +46,7 @@ public final class ParseTreeLower {
   private Type getType(String stype){
     if(stype.equals("int")) return new IntType();
     if(stype.equals("bool")) return new BoolType();
+    if(stype.equals("void")) return new VoidType();
     return new ErrorType("No such type");
   }
 
