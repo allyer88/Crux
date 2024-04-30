@@ -15,6 +15,45 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 class InstPair {
+  //a string of Instructions treated as a single unit.
+  Instruction start;
+  Instruction end;
+  //the variable that holds the value of an expression
+  LocalVar value;
+  //Constructors
+  //One that takes all three.
+  InstPair(Instruction start, Instruction end, LocalVar value){
+    this.start = start;
+    this.end = end;
+    this.value = value;
+  }
+  //One that takes only one Instruction but assigns it to both start and end.
+  InstPair(Instruction instruction, LocalVar value){
+    this.start = instruction;
+    this.end= instruction;
+    this.value = value;
+  }
+  //A variation of both that automatically assigns null to value.
+  InstPair(Instruction start, Instruction end){
+    this.start = start;
+    this.end = end;
+    this.value = null;
+  }
+  InstPair(LocalVar value){
+    this.start = new NopInst();
+    this.end = new NopInst();
+    this.value = value;
+  }
+  //get functions
+  Instruction getStart(){
+    return this.start;
+  }
+  Instruction getEnd(){
+    return this.end;
+  }
+  LocalVar getValue(){
+    return this.value;
+  }
 }
 
 
@@ -23,8 +62,9 @@ class InstPair {
  */
 public final class ASTLower implements NodeVisitor<InstPair> {
   private Program mCurrentProgram = null;
+  //The Function currently being traversed.
   private Function mCurrentFunction = null;
-
+  // Maps the symbol of local variables to the LocalVar.
   private Map<Symbol, LocalVar> mCurrentLocalVarMap = null;
 
   /**
@@ -48,6 +88,20 @@ public final class ASTLower implements NodeVisitor<InstPair> {
    */
   @Override
   public InstPair visit(FunctionDefinition functionDefinition) {
+    List<Symbol> parameters = functionDefinition.getParameters();
+    Symbol funcSymbol = functionDefinition.getSymbol();
+    //create a Function instance
+    Function function = new Function(funcSymbol.getName(), (FuncType)funcSymbol.getType());
+    //add parameters to the localVarMap
+    for(Symbol paras: parameters){
+      LocalVar v = function.getTempVar(paras.getType(), "$");
+      mCurrentLocalVarMap.put(paras, v);
+    }
+    Instruction start;
+    Instruction end;
+    //add the function to the program
+
+    //init the function start Instruction
     return null;
   }
 
