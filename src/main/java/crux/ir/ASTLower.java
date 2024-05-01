@@ -19,16 +19,16 @@ class InstPair {
   Instruction start;
   Instruction end;
   //the variable that holds the value of an expression
-  LocalVar value;
+  Variable value;
   //Constructors
   //One that takes all three.
-  InstPair(Instruction start, Instruction end, LocalVar value){
+  InstPair(Instruction start, Instruction end, Variable value){
     this.start = start;
     this.end = end;
     this.value = value;
   }
   //One that takes only one Instruction but assigns it to both start and end.
-  InstPair(Instruction instruction, LocalVar value){
+  InstPair(Instruction instruction, Variable value){
     this.start = instruction;
     this.end= instruction;
     this.value = value;
@@ -39,10 +39,15 @@ class InstPair {
     this.end = end;
     this.value = null;
   }
-  InstPair(LocalVar value){
+  InstPair(Variable value){
     this.start = new NopInst();
     this.end = new NopInst();
     this.value = value;
+  }
+  InstPair(){
+    this.start = new NopInst();
+    this.end = new NopInst();
+    this.value = null;
   }
   //get functions
   Instruction getStart(){
@@ -51,7 +56,7 @@ class InstPair {
   Instruction getEnd(){
     return this.end;
   }
-  LocalVar getValue(){
+  Variable getValue(){
     return this.value;
   }
 }
@@ -87,7 +92,7 @@ public final class ASTLower implements NodeVisitor<InstPair> {
       n.accept(this);
     }
     // return null
-    return null;
+    return new InstPair();
   }
 
   /**
@@ -124,7 +129,7 @@ public final class ASTLower implements NodeVisitor<InstPair> {
     mCurrentFunction = null;
     mCurrentLocalVarMap.clear();
     // return null
-    return null;
+    return new InstPair();
   }
 
   @Override
@@ -155,7 +160,7 @@ public final class ASTLower implements NodeVisitor<InstPair> {
     if(mCurrentFunction==null){
       GlobalDecl gd = new GlobalDecl(symbol, IntegerConstant.get(mCurrentProgram, 1));
       mCurrentProgram.addGlobalVar(gd);
-      return null;
+      return new InstPair();
     }else {
       //Otherwise, it is a local variable. Allocate a temp var and add it to mCurrentLocalVarMap.
       LocalVar v =  mCurrentFunction.getTempVar(symbol.getType());
@@ -171,7 +176,12 @@ public final class ASTLower implements NodeVisitor<InstPair> {
    */
   @Override
   public InstPair visit(ArrayDeclaration arrayDeclaration) {
-    return null;
+    Symbol symbol = arrayDeclaration.getSymbol();
+    ArrayType arrayType = (ArrayType)symbol.getType();
+    //All array declarations are global. Create and add a GlobalDecl to mCurrentProgram.
+    GlobalDecl gd = new GlobalDecl(symbol, IntegerConstant.get(mCurrentProgram, arrayType.getExtent()));
+    mCurrentProgram.addGlobalVar(gd);
+    return new InstPair();
   }
 
   /**
@@ -180,7 +190,22 @@ public final class ASTLower implements NodeVisitor<InstPair> {
    */
   @Override
   public InstPair visit(VarAccess name) {
-    return null;
+    Symbol symbol = name.getSymbol();
+    //If the symbol is in mCurrentLocalVarMap,
+    if(mCurrentLocalVarMap.containsKey(symbol)){
+      //it is a local variable/parameter.
+      //Return the LocalVar from the map (no instructions necessary).
+      LocalVar v = mCurrentLocalVarMap.get(symbol);
+      return new InstPair(v);
+    }else{
+      //Otherwise create a temp AddressVar and AddressAt instruction to
+      //store the address to the global variable.
+      //offset=0 for non-arrays
+      AddressVar addressVar = mCurrentFunction.getTempAddressVar(symbol.getType());
+      AddressAt addressAt = new AddressAt(addressVar, symbol);
+      return new InstPair(addressAt, addressVar);
+    }
+
   }
 
   /**
@@ -189,6 +214,14 @@ public final class ASTLower implements NodeVisitor<InstPair> {
    */
   @Override
   public InstPair visit(Assignment assignment) {
+    //Visit the lhs and rhs expressions.
+    Expression location = assignment.getLocation();
+    Expression value = assignment.getValue();
+    InstPair locPair = location.accept(this);
+    InstPair valPair = value.accept(this);
+    //If the lhs InstPair is a local var, use CopyInst.
+
+    //If the lhs InstPair is a global var, use StoreInst.
     return null;
   }
 
