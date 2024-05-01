@@ -79,6 +79,14 @@ public final class ASTLower implements NodeVisitor<InstPair> {
 
   @Override
   public InstPair visit(DeclarationList declarationList) {
+    // create new instance of Program class for mCurrentProgram
+    mCurrentProgram = new Program();
+    // for each declaration: visit each declaration
+    List<Node> decls = declarationList.getChildren();
+    for(Node n: decls ){
+      n.accept(this);
+    }
+    // return null
     return null;
   }
 
@@ -88,26 +96,53 @@ public final class ASTLower implements NodeVisitor<InstPair> {
    */
   @Override
   public InstPair visit(FunctionDefinition functionDefinition) {
-    List<Symbol> parameters = functionDefinition.getParameters();
+    // create function instance
     Symbol funcSymbol = functionDefinition.getSymbol();
-    //create a Function instance
     Function function = new Function(funcSymbol.getName(), (FuncType)funcSymbol.getType());
-    //add parameters to the localVarMap
+    // create new hashmap<Symbol, Variable> for mCurrentLocalVarMap
+    mCurrentLocalVarMap = new HashMap<>();
+    // for each argument:
+    // 	create LocalVar using mCurrentFunction.getTempVar() and put them in a list
+    // 	put the variable (↑) to mCurrentLocalVarMap with correct symbol
+    List<LocalVar> localVars = new ArrayList<>();
+    List<Symbol> parameters = functionDefinition.getParameters();
     for(Symbol paras: parameters){
-      LocalVar v = function.getTempVar(paras.getType(), "$");
+      LocalVar v = mCurrentFunction.getTempVar(paras.getType(), "$");
+      localVars.add(v);
       mCurrentLocalVarMap.put(paras, v);
     }
-    Instruction start;
-    Instruction end;
-    //add the function to the program
-
-    //init the function start Instruction
+    // set arguments for mCurrentFunction
+    mCurrentFunction.setArguments(localVars);
+    // add mCurrentFunction to the function list in mCurrentProgram
+    mCurrentProgram.addFunction(mCurrentFunction);
+    // visit function body
+    // set the start node of mCurrentFunction TODO: WHAT IS THIS?
+    StatementList statementLists = functionDefinition.getStatements();
+    InstPair pair = statementLists.accept(this);
+    mCurrentFunction.setStart(pair.getStart());
+    // dump mCurrentFunction and mCurrentLocalVarMap
+    mCurrentFunction = null;
+    mCurrentLocalVarMap.clear();
+    // return null
     return null;
   }
 
   @Override
   public InstPair visit(StatementList statementList) {
-    return null;
+    // start with NopInst
+    NopInst start = new NopInst();
+    // for each statement:
+    List<Node> statements = statementList.getChildren();
+    Instruction end = new NopInst();
+    for(Node node: statements){
+      //visit each statement and connect them
+      InstPair statement = node.accept(this);
+      end.setNext(0, statement.getStart());
+      end = statement.getEnd();
+    }
+    // return InstPair with start and end of statementList
+    // no value for InstPair
+    return new InstPair(start, end);
   }
 
   /**
@@ -115,7 +150,20 @@ public final class ASTLower implements NodeVisitor<InstPair> {
    */
   @Override
   public InstPair visit(VariableDeclaration variableDeclaration) {
-    return null;
+    Symbol symbol = variableDeclaration.getSymbol();
+    //If mCurrentFunction is null, this is a global variable. Add a GlobalDecl to mCurrentProgram.
+    if(mCurrentFunction==null){
+      GlobalDecl gd = new GlobalDecl(symbol, IntegerConstant.get(mCurrentProgram, 1));
+      mCurrentProgram.addGlobalVar(gd);
+      return null;
+    }else {
+      //Otherwise, it is a local variable. Allocate a temp var and add it to mCurrentLocalVarMap.
+      LocalVar v =  mCurrentFunction.getTempVar(symbol.getType());
+      mCurrentLocalVarMap.put(symbol, v);
+      //No instructions need to be done. Return an InstPair of a NopInst if you don’t want
+      //to do null checks in visit(StatmentList).
+      return new InstPair(v);
+    }
   }
 
   /**
