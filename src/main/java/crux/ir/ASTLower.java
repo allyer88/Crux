@@ -19,16 +19,16 @@ class InstPair {
   private Instruction start;
   private Instruction end;
   //the variable that holds the value of an expression
-  private Variable value;
+  private Value value;
   //Constructors
   //One that takes all three.
-  public InstPair(Instruction start, Instruction end, Variable value){
+  public InstPair(Instruction start, Instruction end, Value value){
     this.start = start;
     this.end = end;
     this.value = value;
   }
   //One that takes only one Instruction but assigns it to both start and end.
-  public InstPair(Instruction instruction, Variable value){
+  public InstPair(Instruction instruction, Value value){
     this.start = instruction;
     this.end= instruction;
     this.value = value;
@@ -39,7 +39,7 @@ class InstPair {
     this.end = end;
     this.value = null;
   }
-  public InstPair(Variable value){
+  public InstPair(Value value){
     this.start = new NopInst();
     this.end = new NopInst();
     this.value = value;
@@ -56,7 +56,7 @@ class InstPair {
   public Instruction getEnd(){
     return this.end;
   }
-  public Variable getValue(){
+  public Value getValue(){
     return this.value;
   }
   public boolean isNull(){
@@ -211,8 +211,10 @@ public final class ASTLower implements NodeVisitor<InstPair> {
       //store the address to the global variable.
       //offset=0 for non-arrays
       AddressVar addressVar = mCurrentFunction.getTempAddressVar(symbol.getType());
-      AddressAt addressAt = new AddressAt(addressVar, symbol);
-      return new InstPair(addressAt, addressVar);
+      LocalVar localVar = mCurrentFunction.getTempVar(symbol.getType());
+      LoadInst loadInst = new LoadInst(localVar, addressVar);
+      AddressAt addressAt = new AddressAt(loadInst.getSrcAddress(), symbol);
+      return new InstPair(addressAt, loadInst.getDst());
     }
 
   }
@@ -377,7 +379,23 @@ public final class ASTLower implements NodeVisitor<InstPair> {
    */
   @Override
   public InstPair visit(ArrayAccess access) {
-    return null;
+    //Visit the index.
+    Expression index = access.getIndex();
+    InstPair indexPair = index.accept(this);
+    //Create a temp AddressVar and AddressAt to store the address to the global variable.
+    Symbol symbol = access.getBase();
+    //For arrays, use the base type
+    ArrayType arrayType = (ArrayType)symbol.getType();
+    AddressVar addressVar = mCurrentFunction.getTempAddressVar(arrayType.getBase());
+    //do the load
+    LocalVar localVar = mCurrentFunction.getTempVar(arrayType.getBase());
+    LoadInst loadInst = new LoadInst(localVar, addressVar);
+    AddressAt addressAt = new AddressAt(loadInst.getSrcAddress(), symbol);
+    Instruction start = indexPair.getStart();
+    Instruction end = indexPair.getEnd();
+    end.setNext(0, addressAt);
+    end = addressAt;
+    return new InstPair(start, end, loadInst.getDst());//TODO: NOT SURE WHETHER THIS IS THE CORRECT VALUE
   }
 
   /**
@@ -385,7 +403,9 @@ public final class ASTLower implements NodeVisitor<InstPair> {
    */
   @Override
   public InstPair visit(LiteralBool literalBool) {
-    return null;
+    boolean value = literalBool.getValue();
+    BooleanConstant booleanConstant = BooleanConstant.get(mCurrentProgram, value);
+    return new InstPair(booleanConstant);
   }
 
   /**
@@ -393,7 +413,9 @@ public final class ASTLower implements NodeVisitor<InstPair> {
    */
   @Override
   public InstPair visit(LiteralInt literalInt) {
-    return null;
+    long value = literalInt.getValue();
+    IntegerConstant integerConstant = IntegerConstant.get(mCurrentProgram, value);
+    return new InstPair(integerConstant);
   }
 
   /**
@@ -401,7 +423,16 @@ public final class ASTLower implements NodeVisitor<InstPair> {
    */
   @Override
   public InstPair visit(Return ret) {
-    return null;
+    //Visit the return expression.
+    Expression value = ret.getValue();
+    InstPair retPair = value.accept(this);
+    //Pass its value into a ReturnInst.
+    ReturnInst returnInst = new ReturnInst((LocalVar)retPair.getValue());
+    Instruction start = retPair.getStart();
+    Instruction end = retPair.getEnd();
+    end.setNext(0, returnInst);
+    end = returnInst;
+    return new InstPair(start, end);
   }
 
   /**
