@@ -45,14 +45,16 @@ class InstPair {
     this.isGlobal = false;
   }
   public InstPair(Variable value, Boolean isGlobal){
-    this.start = new NopInst();
-    this.end = new NopInst();
+    NopInst nopInst = new NopInst();
+    this.start =  nopInst;
+    this.end = nopInst;
     this.value = value;
     this.isGlobal = isGlobal;
   }
   public InstPair(){
-    this.start = new NopInst();
-    this.end = new NopInst();
+    NopInst nopInst = new NopInst();
+    this.start =  nopInst;
+    this.end = nopInst;
     this.value = null;
     this.isGlobal = false;
   }
@@ -123,11 +125,13 @@ public final class ASTLower implements NodeVisitor<InstPair> {
     // 	create LocalVar using mCurrentFunction.getTempVar() and put them in a list
     // 	put the variable (↑) to mCurrentLocalVarMap with correct symbol
     List<LocalVar> localVars = new ArrayList<>();
-    List<Symbol> parameters = functionDefinition.getParameters();
-    for(Symbol paras: parameters){
-      LocalVar v = mCurrentFunction.getTempVar(paras.getType());
-      localVars.add(v);
-      mCurrentLocalVarMap.put(paras, v);
+    if(functionDefinition.getParameters()!=null){
+      List<Symbol> parameters = functionDefinition.getParameters();
+      for(Symbol paras: parameters){
+        LocalVar v = mCurrentFunction.getTempVar(paras.getType());
+        localVars.add(v);
+        mCurrentLocalVarMap.put(paras, v);
+      }
     }
     // set arguments for mCurrentFunction
     mCurrentFunction.setArguments(localVars);
@@ -140,7 +144,7 @@ public final class ASTLower implements NodeVisitor<InstPair> {
     mCurrentFunction.setStart(pair.getStart());
     // dump mCurrentFunction and mCurrentLocalVarMap
     mCurrentFunction = null;
-    mCurrentLocalVarMap.clear();
+    mCurrentLocalVarMap=null;
     // return null
     return new InstPair();
   }
@@ -148,7 +152,7 @@ public final class ASTLower implements NodeVisitor<InstPair> {
   @Override
   public InstPair visit(StatementList statementList) {
     // start with NopInst
-    NopInst start = new NopInst();
+    Instruction start = new NopInst();
     // for each statement:
     List<Node> statements = statementList.getChildren();
     Instruction end = new NopInst();
@@ -184,7 +188,7 @@ public final class ASTLower implements NodeVisitor<InstPair> {
       mCurrentLocalVarMap.put(symbol, v);
       //No instructions need to be done. Return an InstPair of a NopInst if you don’t want
       //to do null checks in visit(StatmentList).
-      return new InstPair(v, false);
+      return new InstPair();
     }
   }
 
@@ -235,7 +239,6 @@ public final class ASTLower implements NodeVisitor<InstPair> {
   @Override
   public InstPair visit(Assignment assignment) {
     //Visit the lhs and rhs expressions.
-    Expression location = assignment.getLocation();
     Expression value = assignment.getValue();
     InstPair valPair = value.accept(this);
     Instruction end = new NopInst();
@@ -244,15 +247,16 @@ public final class ASTLower implements NodeVisitor<InstPair> {
       Symbol symbol = locVarAccess.getSymbol();
       if(mCurrentLocalVarMap.containsKey(symbol)){
         //If the location is a VarAccess to a LocalVar, copy the value to it.
-        InstPair locPair = location.accept(this);
-        end.setNext(0, locPair.getStart());
+        InstPair locPair = locVarAccess.accept(this);
+        Instruction start = locPair.getStart();
         end = locPair.getEnd();
+        LocalVar localVar = (LocalVar) locPair.getValue();
         end.setNext(0, valPair.getStart());
         end = valPair.getEnd();
-        CopyInst copyInst = new CopyInst((LocalVar)locPair.getValue(), valPair.getValue());
+        CopyInst copyInst = new CopyInst(localVar, valPair.getValue());
         end.setNext(0, copyInst);
         end = copyInst;
-        return new InstPair(locPair.getStart(), end);
+        return new InstPair(start, end);
       }else{
         AddressVar addressVar = mCurrentFunction.getTempAddressVar(symbol.getType());
         AddressAt addressAt = new AddressAt(addressVar, symbol);
@@ -265,9 +269,24 @@ public final class ASTLower implements NodeVisitor<InstPair> {
         end = storeInst;
         return new InstPair(addressAt, end);
       }
+    }else{
+      //it is ArrayAccess
+      ArrayAccess arrayVarAccess = (ArrayAccess)assignment.getLocation();
+      Symbol symbol = arrayVarAccess.getBase();
+      ArrayType arrayType = (ArrayType)symbol.getType();
+      Expression index = arrayVarAccess.getIndex();
+      InstPair indexPair = index.accept(this);
+      AddressVar addressVar = mCurrentFunction.getTempAddressVar(arrayType.getBase());
+      AddressAt addressAt = new AddressAt(addressVar, symbol, (LocalVar) indexPair.getValue());
+      end.setNext(0, addressAt);
+      end = addressAt;
+      end.setNext(0, valPair.getStart());
+      end = valPair.getEnd();
+      StoreInst storeInst = new StoreInst((LocalVar)valPair.getValue(), addressAt.getDst());
+      end.setNext(0, storeInst);
+      end = storeInst;
+      return new InstPair(addressAt, end);
     }
-        return new InstPair();
-
   }
 
   /**
@@ -279,14 +298,13 @@ public final class ASTLower implements NodeVisitor<InstPair> {
     List<LocalVar> params = new ArrayList<>();
     Instruction start = new NopInst();
     Instruction end = new NopInst();
-    for(Expression expression: arguments){
+    for(int i=0;i<arguments.size();i++){
+      Expression expression = arguments.get(i);
       //Visit each argument to construct its CFG and add a localVar containing
       //the argument value to the param list.
       InstPair instPair = expression.accept(this);
-
       params.add((LocalVar)instPair.getValue());
-
-      if(start.getClass() == NopInst.class){
+      if(i==0){
         start = instPair.getStart();
       }else{
         end.setNext(0,instPair.getStart());
@@ -294,11 +312,12 @@ public final class ASTLower implements NodeVisitor<InstPair> {
       end = instPair.getEnd();
     }
     Symbol callee = call.getCallee();
+    FuncType funcType = (FuncType) callee.getType();
     //If function is not void, create a temp var for the return value and pass
     //that as the InstPair’s value.
     LocalVar destVar = null;
-    if(callee.getType().getClass() != VoidType.class){
-      destVar =  mCurrentFunction.getTempVar(call.getType());
+    if(funcType.getRet().getClass() != VoidType.class){
+      destVar =  mCurrentFunction.getTempVar(funcType.getRet());
     }
     //Construct CallInst with the function symbol.
     if(destVar!=null) {
@@ -310,7 +329,7 @@ public final class ASTLower implements NodeVisitor<InstPair> {
       CallInst callInst = new CallInst(callee, params);
       end.setNext(0, callInst);
       end = callInst;
-      return new InstPair(start,end);
+      return new InstPair(start, end);
     }
   }
 
@@ -440,7 +459,7 @@ public final class ASTLower implements NodeVisitor<InstPair> {
   public InstPair visit(LiteralInt literalInt) {
     long value = literalInt.getValue();
     IntegerConstant integerConstant = IntegerConstant.get(mCurrentProgram, value);
-    LocalVar localVar = mCurrentFunction.getTempVar(new BoolType());
+    LocalVar localVar = mCurrentFunction.getTempVar(new IntType());
     CopyInst copyInst = new CopyInst(localVar, integerConstant);
     return new InstPair(copyInst, localVar, false);
   }
