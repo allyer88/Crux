@@ -160,6 +160,9 @@ public final class ASTLower implements NodeVisitor<InstPair> {
         end.setNext(0, statement.getStart());
       }
       end = statement.getEnd();
+      if(nestLoops.getCurrentLoop()!=null && (end == nestLoops.getCurrentLoop().getExit() || end == nestLoops.getCurrentLoop().getHeader())){
+        break;
+      }
     }
     // return InstPair with start and end of statementList
     // no value for InstPair
@@ -525,7 +528,8 @@ public final class ASTLower implements NodeVisitor<InstPair> {
    */
   @Override
   public InstPair visit(Break brk) {
-    return new InstPair();
+    LoopInfo loopInfo = nestLoops.getCurrentLoop();
+    return new InstPair(loopInfo.getExit(), loopInfo.getExit());
   }
 
   /**
@@ -533,7 +537,8 @@ public final class ASTLower implements NodeVisitor<InstPair> {
    */
   @Override
   public InstPair visit(Continue cont) {
-    return new InstPair();
+    LoopInfo loopInfo = nestLoops.getCurrentLoop();
+    return new InstPair(loopInfo.getHeader(), loopInfo.getHeader());
   }
 
   /**
@@ -573,26 +578,70 @@ public final class ASTLower implements NodeVisitor<InstPair> {
   /**
    * Implement loops.
    */
+  class LoopInfo{
+    private final Instruction header;
+    private final Instruction exit;
 
+    public LoopInfo(){
+      this.header = new NopInst();
+      this.exit = new NopInst();
+    }
+    public Instruction getHeader() {
+      return header;
+    }
+
+    public Instruction getExit() {
+      return exit;
+    }
+  }
+  class NestLoops{
+    //for nesting
+    private ArrayList<LoopInfo> loopInfos;
+    Boolean didExit;
+    public NestLoops(){
+      loopInfos = new ArrayList<>();
+      didExit = false;
+    }
+    //get current Loop info
+    public LoopInfo getCurrentLoop(){
+      if(loopInfos.isEmpty()){
+        return null;
+      }
+      return loopInfos.get(loopInfos.size()-1);
+    }
+    public void addLoop(LoopInfo loopInfo){
+      loopInfos.add(loopInfo);
+    }
+
+    public Boolean getDidExit() {
+      return didExit;
+    }
+
+    public void setDidExit(Boolean didExit) {
+      this.didExit = didExit;
+    }
+    public void removeCurrentLoop(){
+      loopInfos.remove(loopInfos.size()-1);
+    }
+  }
+  private NestLoops nestLoops = new NestLoops();
   @Override
   public InstPair visit(Loop loop) {
     // Visit the loop header
     // Create a NopInst as the loop exit,
-    //and connect header to exit. Store the exit in a global variable ( since loops
-    //can be nested, outer loop exits need to be remembered in some
-    //way ) , so that break statements in the
-    //loop can find the exit.
-    // Visit the loop body , and add edge
-    //from header to body
-    //StatementList body = loop.getBody();
-    //InstPair bodyInstPair =  body.accept(this);
-    //end.setNext(0, bodyInstPair.getStart());
-    //end = bodyInstPair.getEnd();
-
-    // Add two edges from the body, one
-    //to the loop header and one to the
-    //loop exit
-    // Remove the current loop exit
-    return new InstPair();
+    LoopInfo loopInfo = new LoopInfo();
+    Instruction start = loopInfo.getHeader();
+    Instruction end = loopInfo.getHeader();
+    nestLoops.addLoop(loopInfo);
+    // Visit the loop body , and add edge from header to body
+    StatementList body = loop.getBody();
+    InstPair bodyInstPair = body.accept(this);
+    end.setNext(0, bodyInstPair.getStart());
+    end = bodyInstPair.getEnd();
+    end.setNext(0, nestLoops.getCurrentLoop().getHeader());
+    end = nestLoops.getCurrentLoop().getHeader();
+    nestLoops.removeCurrentLoop();
+    nestLoops.setDidExit(false);
+    return new InstPair(start, loopInfo.getExit());
   }
 }
