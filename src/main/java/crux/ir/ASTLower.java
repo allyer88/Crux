@@ -271,8 +271,10 @@ public final class ASTLower implements NodeVisitor<InstPair> {
       ArrayType arrayType = (ArrayType)symbol.getType();
       Expression index = arrayVarAccess.getIndex();
       InstPair indexPair = index.accept(this);
+      end.setNext(0, indexPair.getStart());
+      end = indexPair.getEnd();
       AddressVar addressVar = mCurrentFunction.getTempAddressVar(arrayType.getBase());
-      AddressAt addressAt = new AddressAt(addressVar, symbol, (LocalVar) indexPair.getValue());
+      AddressAt addressAt = new AddressAt(addressVar, symbol, (LocalVar)indexPair.getValue());
       end.setNext(0, addressAt);
       end = addressAt;
       end.setNext(0, valPair.getStart());
@@ -280,7 +282,7 @@ public final class ASTLower implements NodeVisitor<InstPair> {
       StoreInst storeInst = new StoreInst((LocalVar)valPair.getValue(), addressAt.getDst());
       end.setNext(0, storeInst);
       end = storeInst;
-      return new InstPair(addressAt, end);
+      return new InstPair(indexPair.getStart(), end);
     }
   }
 
@@ -403,34 +405,42 @@ public final class ASTLower implements NodeVisitor<InstPair> {
           destVar = unaryNotInst.getDst();
       } else if (op == Operation.LOGIC_AND || op == Operation.LOGIC_OR){
         //Boolean Operators
-        CopyInst leftCopy = (CopyInst) leftPair.getStart();
-        BooleanConstant leftBool = (BooleanConstant) leftCopy.getSrcValue();
         JumpInst jumpInst = new JumpInst((LocalVar)leftPair.getValue());
         end.setNext(0, jumpInst);
         end = jumpInst;
         LocalVar finalVar = mCurrentFunction.getTempVar(new BoolType());
-        Instruction copyInst = new NopInst();
-        if(op==Operation.LOGIC_AND){
-          if(!leftBool.getValue()) { //==false
-            copyInst = new CopyInst(finalVar, BooleanConstant.get(mCurrentProgram, false));
-          }else{
-            end.setNext(1, rightPair.getStart());
-            end = rightPair.getEnd();
-            copyInst = new CopyInst(finalVar, rightPair.getValue());
-          }
-        }else{
-          if(leftBool.getValue()) { //==false
-            copyInst = new CopyInst(finalVar, BooleanConstant.get(mCurrentProgram, true));
-          }else{
-            end.setNext(1, rightPair.getStart());
-            end = rightPair.getEnd();
-            copyInst = new CopyInst(finalVar, rightPair.getValue());
-          }
-        }
-        end.setNext(0, copyInst);
-        end = copyInst;
         NopInst nop = new NopInst();
-        end.setNext(0,nop);
+        if(op==Operation.LOGIC_AND){
+            //false
+            CopyInst falseCopyInst = new CopyInst(finalVar, BooleanConstant.get(mCurrentProgram, false));
+            end.setNext(0, falseCopyInst);
+            end = falseCopyInst;
+            end.setNext(0,nop);
+            //true
+            end = jumpInst;
+            end.setNext(1, rightPair.getStart());
+            end = rightPair.getEnd();
+            CopyInst trueCopyInst = new CopyInst(finalVar, rightPair.getValue());
+            end.setNext(0, trueCopyInst);
+            end = trueCopyInst;
+            end.setNext(0,nop);
+        }else{
+          //or
+          //true
+            CopyInst trueCopyInst = new CopyInst(finalVar, BooleanConstant.get(mCurrentProgram, true));
+            end.setNext(1, trueCopyInst );
+            end = trueCopyInst;
+            end.setNext(0, nop);
+            //false
+            end = jumpInst;
+            end.setNext(0, rightPair.getStart());
+            end = rightPair.getEnd();
+            CopyInst falseCopyInst = new CopyInst(finalVar, rightPair.getValue());
+            end.setNext(0, falseCopyInst);
+            end = falseCopyInst;
+            end.setNext(0, nop);
+        }
+        //merge
         end = nop;
         destVar = finalVar;
       }
@@ -458,15 +468,15 @@ public final class ASTLower implements NodeVisitor<InstPair> {
     AddressVar addressVar = mCurrentFunction.getTempAddressVar(arrayType.getBase());
     //do the load
     LocalVar localVar = mCurrentFunction.getTempVar(arrayType.getBase());
-    LoadInst loadInst = new LoadInst(localVar, addressVar);
-    AddressAt addressAt = new AddressAt(loadInst.getSrcAddress(), symbol);
+    AddressAt addressAt = new AddressAt(addressVar, symbol, (LocalVar)indexPair.getValue());
+    LoadInst loadInst = new LoadInst(localVar, addressAt.getDst());
     Instruction start = indexPair.getStart();
     Instruction end = indexPair.getEnd();
     end.setNext(0, addressAt);
     end = addressAt;
     end.setNext(0, loadInst);
     end = loadInst;
-    return new InstPair(start, end, loadInst.getDst());//TODO: NOT SURE WHETHER THIS IS THE CORRECT VALUE
+    return new InstPair(start, end, loadInst.getDst());
   }
 
   /**
@@ -515,7 +525,7 @@ public final class ASTLower implements NodeVisitor<InstPair> {
    */
   @Override
   public InstPair visit(Break brk) {
-    return null;
+    return new InstPair();
   }
 
   /**
@@ -523,7 +533,7 @@ public final class ASTLower implements NodeVisitor<InstPair> {
    */
   @Override
   public InstPair visit(Continue cont) {
-    return null;
+    return new InstPair();
   }
 
   /**
@@ -542,22 +552,20 @@ public final class ASTLower implements NodeVisitor<InstPair> {
     end = jumpInst;
     NopInst nop = new NopInst();
     // Visit thenBlock and elseBlock.
-    CopyInst condCopy = (CopyInst)condPair.getStart();
-    BooleanConstant condBool = (BooleanConstant) condCopy.getSrcValue();
-    if(condBool.getValue()){
-      StatementList thenBlock = ifElseBranch.getThenBlock();
-      InstPair thenPair = thenBlock.accept(this);
-      end.setNext(1, thenPair.getStart());
-      end = thenPair.getEnd();
-    }
-    if(ifElseBranch.getElseBlock()!=null && !condBool.getValue()){
+    StatementList thenBlock = ifElseBranch.getThenBlock();
+    InstPair thenPair = thenBlock.accept(this);
+    end.setNext(1, thenPair.getStart());
+    end = thenPair.getEnd();
+    end.setNext(0, nop);
+    if(ifElseBranch.getElseBlock()!=null ){
       StatementList elseBlock = ifElseBranch.getElseBlock();
       InstPair elsePair = elseBlock.accept(this);
+      end = jumpInst;
       end.setNext(0, elsePair.getStart());
       end = elsePair.getEnd();
+      end.setNext(0, nop);
     }
     // Merge the blocks into a NopInst.
-    end.setNext(0, nop);
     end = nop;
     return new InstPair(start, end);
   }
@@ -565,24 +573,26 @@ public final class ASTLower implements NodeVisitor<InstPair> {
   /**
    * Implement loops.
    */
+
   @Override
   public InstPair visit(Loop loop) {
     // Visit the loop header
-    StatementList body = loop.getBody();
-    InstPair bodyPair = body.accept(this);
-    Instruction header = bodyPair.getStart();
     // Create a NopInst as the loop exit,
-    //and connect header to exit. Store
-    //the exit in a global variable ( since loops
+    //and connect header to exit. Store the exit in a global variable ( since loops
     //can be nested, outer loop exits need to be remembered in some
     //way ) , so that break statements in the
     //loop can find the exit.
     // Visit the loop body , and add edge
     //from header to body
+    //StatementList body = loop.getBody();
+    //InstPair bodyInstPair =  body.accept(this);
+    //end.setNext(0, bodyInstPair.getStart());
+    //end = bodyInstPair.getEnd();
+
     // Add two edges from the body, one
     //to the loop header and one to the
     //loop exit
     // Remove the current loop exit
-    return null;
+    return new InstPair();
   }
 }
