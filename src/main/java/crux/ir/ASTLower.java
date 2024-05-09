@@ -160,9 +160,7 @@ public final class ASTLower implements NodeVisitor<InstPair> {
         end.setNext(0, statement.getStart());
       }
       end = statement.getEnd();
-      if(nestLoops.getCurrentLoop()!=null && (end == nestLoops.getCurrentLoop().getExit() || end == nestLoops.getCurrentLoop().getHeader())){
-        break;
-      }
+
     }
     // return InstPair with start and end of statementList
     // no value for InstPair
@@ -561,14 +559,18 @@ public final class ASTLower implements NodeVisitor<InstPair> {
     InstPair thenPair = thenBlock.accept(this);
     end.setNext(1, thenPair.getStart());
     end = thenPair.getEnd();
-    end.setNext(0, nop);
+    if(nestLoops.isEmpty() || (!nestLoops.isEmpty() && end != nestLoops.getCurrentLoop().getExit())) {
+      end.setNext(0, nop);
+    }
     if(ifElseBranch.getElseBlock()!=null ){
       StatementList elseBlock = ifElseBranch.getElseBlock();
       InstPair elsePair = elseBlock.accept(this);
       end = jumpInst;
       end.setNext(0, elsePair.getStart());
       end = elsePair.getEnd();
-      end.setNext(0, nop);
+      if(nestLoops.isEmpty() || (!nestLoops.isEmpty() && end != nestLoops.getCurrentLoop().getExit())) {
+        end.setNext(0, nop);
+      }
     }
     // Merge the blocks into a NopInst.
     end = nop;
@@ -601,6 +603,9 @@ public final class ASTLower implements NodeVisitor<InstPair> {
     public NestLoops(){
       loopInfos = new ArrayList<>();
       didExit = false;
+    }
+    public boolean isEmpty(){
+      return loopInfos.isEmpty();
     }
     //get current Loop info
     public LoopInfo getCurrentLoop(){
@@ -638,10 +643,11 @@ public final class ASTLower implements NodeVisitor<InstPair> {
     InstPair bodyInstPair = body.accept(this);
     end.setNext(0, bodyInstPair.getStart());
     end = bodyInstPair.getEnd();
-    end.setNext(0, nestLoops.getCurrentLoop().getHeader());
+    if(bodyInstPair.getEnd()!=nestLoops.getCurrentLoop().getHeader()){
+      end.setNext(0, nestLoops.getCurrentLoop().getHeader());
+    }
     end = nestLoops.getCurrentLoop().getHeader();
     nestLoops.removeCurrentLoop();
-    nestLoops.setDidExit(false);
     return new InstPair(start, loopInfo.getExit());
   }
 }
