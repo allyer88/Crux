@@ -395,16 +395,7 @@ public final class ASTLower implements NodeVisitor<InstPair> {
         end.setNext(0, compareInst);
         end = compareInst;
         destVar = compareInst.getDst();
-      } else if (op == Operation.LOGIC_NOT) {
-        //connect to right operator
-        end.setNext(0, rightPair.getStart());
-        end = rightPair.getEnd();
-        //For LOGIC_NOT, use UnaryNotInst.
-          UnaryNotInst unaryNotInst = new UnaryNotInst(destVar, (LocalVar) leftPair.getValue());
-          end.setNext(0, unaryNotInst);
-          end = unaryNotInst;
-          destVar = unaryNotInst.getDst();
-      } else if (op == Operation.LOGIC_AND || op == Operation.LOGIC_OR){
+      }  else if (op == Operation.LOGIC_AND || op == Operation.LOGIC_OR){
         //Boolean Operators
         JumpInst jumpInst = new JumpInst((LocalVar)leftPair.getValue());
         end.setNext(0, jumpInst);
@@ -445,6 +436,12 @@ public final class ASTLower implements NodeVisitor<InstPair> {
         end = nop;
         destVar = finalVar;
       }
+    }else if (op == Operation.LOGIC_NOT) {
+      //For LOGIC_NOT, use UnaryNotInst.
+      UnaryNotInst unaryNotInst = new UnaryNotInst(destVar, (LocalVar) leftPair.getValue());
+      end.setNext(0, unaryNotInst);
+      end = unaryNotInst;
+      destVar = unaryNotInst.getDst();
     }
     //Create temp var to store result.
     return new InstPair(start, end, destVar);
