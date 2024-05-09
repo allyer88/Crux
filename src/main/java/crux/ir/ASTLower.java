@@ -61,11 +61,6 @@ class InstPair {
   public Variable getValue(){
     return this.value;
   }
-  public boolean isNull(){
-    return this.start.getClass()== NopInst.class
-            && this.end.getClass()== NopInst.class
-            && this.value ==null;
-  }
 }
 
 
@@ -556,10 +551,11 @@ public final class ASTLower implements NodeVisitor<InstPair> {
     InstPair thenPair = thenBlock.accept(this);
     end.setNext(1, thenPair.getStart());
     end = thenPair.getEnd();
+    //if "break", not merge to nop
     if(nestLoops.isEmpty() || (!nestLoops.isEmpty() && end != nestLoops.getCurrentLoop().getExit())) {
       end.setNext(0, nop);
     }
-    if(ifElseBranch.getElseBlock()!=null ){
+    if(ifElseBranch.getElseBlock()!=null){
       StatementList elseBlock = ifElseBranch.getElseBlock();
       InstPair elsePair = elseBlock.accept(this);
       end = jumpInst;
@@ -577,6 +573,7 @@ public final class ASTLower implements NodeVisitor<InstPair> {
   /**
    * Implement loops.
    */
+  //a loop's header end exit pointers
   class LoopInfo{
     private final Instruction header;
     private final Instruction exit;
@@ -593,18 +590,19 @@ public final class ASTLower implements NodeVisitor<InstPair> {
       return exit;
     }
   }
+  //use for track current loop
+  //loop{loop{}}
   class NestLoops{
     //for nesting
     private ArrayList<LoopInfo> loopInfos;
-    Boolean didExit;
+
     public NestLoops(){
       loopInfos = new ArrayList<>();
-      didExit = false;
     }
     public boolean isEmpty(){
       return loopInfos.isEmpty();
     }
-    //get current Loop info
+    //get current scope Loop info
     public LoopInfo getCurrentLoop(){
       if(loopInfos.isEmpty()){
         return null;
@@ -615,13 +613,6 @@ public final class ASTLower implements NodeVisitor<InstPair> {
       loopInfos.add(loopInfo);
     }
 
-    public Boolean getDidExit() {
-      return didExit;
-    }
-
-    public void setDidExit(Boolean didExit) {
-      this.didExit = didExit;
-    }
     public void removeCurrentLoop(){
       loopInfos.remove(loopInfos.size()-1);
     }
@@ -640,10 +631,9 @@ public final class ASTLower implements NodeVisitor<InstPair> {
     InstPair bodyInstPair = body.accept(this);
     end.setNext(0, bodyInstPair.getStart());
     end = bodyInstPair.getEnd();
-    if(bodyInstPair.getEnd()!=nestLoops.getCurrentLoop().getHeader()){
-      end.setNext(0, nestLoops.getCurrentLoop().getHeader());
-    }
-    end = nestLoops.getCurrentLoop().getHeader();
+    //handle jump to header
+    end.setNext(0, nestLoops.getCurrentLoop().getHeader());
+    //remove current loop
     nestLoops.removeCurrentLoop();
     return new InstPair(start, loopInfo.getExit());
   }
