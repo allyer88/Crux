@@ -1,10 +1,7 @@
 package crux.backend;
 
 import crux.ast.SymbolTable.Symbol;
-import crux.ast.types.ArrayType;
-import crux.ast.types.BoolType;
-import crux.ast.types.IntType;
-import crux.ast.types.Type;
+import crux.ast.types.*;
 import crux.ir.*;
 import crux.ir.insts.*;
 import crux.printing.IRValueFormatter;
@@ -18,6 +15,7 @@ import java.util.*;
 public final class CodeGen extends InstVisitor {
   private final Program p;
   private final CodePrinter out;
+  private List<String> argReg = Arrays.asList("%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9");
 
   public CodeGen(Program p) {
     this.p = p;
@@ -65,26 +63,29 @@ public final class CodeGen extends InstVisitor {
     }
     return varMap.get(v);
   }
+
   HashMap<Instruction, String> InstMap =new HashMap<Instruction, String>();
 
   private void visitBody(Instruction i, Function f, int count[]){
-    //Linearize CFG using jumps and labels
-    //Use DFS traversal
-    //Refer to Function.assignLabels(int count[])
+    //Keep track of instructions to visit in a stack (like a DFS)
     //Keep track of visited instructions in a set to avoid redundant visits
+    //If the instruction needs a label, print the label first
+    //Visit current instruction on stack, then push the next instructions onto stack
+    Boolean visited = false;
     while(i!=null){
-      if(InstMap.containsKey(i)){
+      //If instruction has already been visited, jmp to its label instead.
+      if(InstMap.containsKey(i)) {
         out.printCode("jmp " + InstMap.get(i));
-      }else if(i.getClass() == JumpInst.class){
-        HashMap<Instruction, String> var = f.assignLabels(count);
-        InstMap.putAll(var);
-        i.accept(this);
       }else {
-        i.accept(this);
+          HashMap<Instruction, String> var = f.assignLabels(count);
+          InstMap.putAll(var);
+          out.printCode(InstMap.get(i)+":");
+          i.accept(this);
       }
       i = i.getNext(0);
       visitBody(i,f ,count);
       i = i.getNext(1);
+
     }
 
   }
@@ -100,7 +101,6 @@ public final class CodeGen extends InstVisitor {
     numSlots = (numSlots + 1) & ~1; //round up to nearest even number
     out.printCode("enter $(8 * " + numSlots + "), $0");
     //Move arguments from registers to local variable
-    List<String> argReg = Arrays.asList("%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9");
     List<LocalVar> args= f.getArguments();
     for(int i=0;i<args.size();i++){
       int offset;
@@ -128,24 +128,22 @@ public final class CodeGen extends InstVisitor {
     LocalVar varOffset = i.getOffset();
     Symbol symbol = i.getBase();
     String name = symbol.getName();
-    int varCount = getStackSlot(i.getDst());
-    int varStackOffset = -varCount*8;
     out.printCode("movq "+ name+ "@GOTPCREL(%rip) , %r11");
-    out.printCode("movq %r11, " + varStackOffset + "(%rbp)");
     if(varOffset!=null){
       int offsetCount = getStackSlot(varOffset);
       int stackOffset = -offsetCount*8;
-      out.printCode("movq " + stackOffset + "(%rbp), %r11" );// Load offset
-      out.printCode("movq $8, %r10");
-      out.printCode("imul %r10, %r11");// Multiply offset by 8
-
-      movq Data@GOTPCREL(%rip) , %r10     // Load array address
-      addq %r10, %r11                     // Add array base address with offset
-      movq %r11, -368(%rbp)
+      out.printCode("movq " + stackOffset + "(%rbp), %r10" );// Load offset
+      out.printCode("imulq $8, %r10");// Multiply offset by 8
+      out.printCode("addq %r10, %r11"); // Add array base address with offset
     }
+    AddressVar dst = i.getDst();
+    int dstCount = getStackSlot(dst);
+    int dstOffset = -dstCount*8;
+    out.printCode("movq %r11, " + dstOffset + "(%rbp)");
   }
 
   public void visit(BinaryOperator i) {
+    out.printCode("/* BinaryOperator */");
     Variable dst = i.getDst();
     Variable lhs = i.getLeftOperand();
     Variable rhs = i.getRightOperand();
@@ -178,6 +176,7 @@ public final class CodeGen extends InstVisitor {
   }
 
   public void visit(CompareInst i) {
+    out.printCode("/* CompareInst */");
     Variable dst = i.getDst();
     Variable lhs = i.getLeftOperand();
     Variable rhs = i.getRightOperand();
@@ -220,22 +219,51 @@ public final class CodeGen extends InstVisitor {
     Value scr = i.getSrcValue();
     int dstslot = getStackSlot(dst);
     int dstoffset = -dstslot * 8;
-    out.printCode("movq " + scr + "%r10" );
-    out.printCode("movq "+dstoffset+"(%rbp), %r11");
-
+    out.printCode("movq $" + scr + ", %r10" );
+    out.printCode("movq %r10, "+ dstoffset+"(%rbp)");
   }
 
-  public void visit(JumpInst i) {}
+  public void visit(JumpInst i) {
+    out.printCode("/* JumpInst */");
+    LocalVar pred = i.getPredicate();
+    int predslot = getStackSlot(pred);
+    int predoffset = -predslot * 8;
+    out.printCode("movq " + predoffset + "(%rbp), " + "%r10");
+    out.printCode("cmp $1, %r10");
+    String trueLabel = InstMap.get(i);
+    out.printCode("je " + trueLabel);
+  }
 
-  public void visit(LoadInst i) {}
+  public void visit(LoadInst i) {
+    out.printCode("/* LoadInst */");
+    LocalVar dst  = i.getDst();
+    AddressVar scr = i.getSrcAddress();
+    int scrslot = getStackSlot(scr);
+    int scroffset = -scrslot * 8;
+    int dstslot = getStackSlot(dst);
+    int dstoffset = -dstslot * 8;
+    out.printCode("movq " + scroffset +"(%rbp), %r10");
+    out.printCode("movq 0(%r10), " + dstoffset + "(%rbp)");
+  }
 
   public void visit(NopInst i) {
     out.printCode("/* Nop */");
   }
 
-  public void visit(StoreInst i) {}
+  public void visit(StoreInst i) {
+    out.printCode("/* StoreInst */");
+    LocalVar scr  = i.getSrcValue();
+    AddressVar dst = i.getDestAddress();
+    int scrslot = getStackSlot(scr);
+    int scroffset = -scrslot * 8;
+    int dstslot = getStackSlot(dst);
+    int dstoffset = -dstslot * 8;
+    out.printCode("movq " + scroffset +"(%rbp), %r10");
+    out.printCode("movq %r10, " + dstoffset + "(%rbp)");
+  }
 
   public void visit(ReturnInst i) {
+    out.printCode("/* ReturnInst */");
     LocalVar returnValue = i.getReturnValue();
     int retslot = getStackSlot(returnValue);
     int retoffset = -retslot * 8;
@@ -246,7 +274,44 @@ public final class CodeGen extends InstVisitor {
     out.printCode("ret");
   }
 
-  public void visit(CallInst i) {}
+  public void visit(CallInst i) {
+    out.printCode("/* CallInst */");
+    //movq all of the arguments to their correct locations (see Slide 13).
+    List<LocalVar> params =  i.getParams();
+    for (int j=0; j< params.size();j++){
+      int slot = getStackSlot(params.get(j));
+      int offset = -slot * 8;
+      if(j<6){
+        out.printCode("movq " + offset+ "(%rbp), " + argReg.get(j));
+      }else{
+        int argRegOffset = 16 * (j-5);
+        out.printCode("movq "+  offset+ "(%rbp), " + argRegOffset + "(%rbp)");
+      }
+    }
+    //call func
+    //func is the label of the function.
+    String func = InstMap.get(i);
+    out.printCode("call "+ func);
+    //If the function is not void, the return value is in %rax and you should movq it into the stack.
+    Symbol symbol = i.getCallee();
+    if(symbol.getType().getClass() != VoidType.class){
+      LocalVar dst = i.getDst();
+      int slot = getStackSlot(dst);
+      int offset = -slot * 8;
+      out.printCode("movq %rax, "+offset+"(%rbp)");
+    }
+  }
 
-  public void visit(UnaryNotInst i) {}
+  public void visit(UnaryNotInst i) {
+    out.printCode("/* UnaryNotInst */");
+    LocalVar inner = i.getInner();
+    LocalVar dst = i.getDst();
+    int innerslot = getStackSlot(inner);
+    int inneroffset = -innerslot * 8;
+    int dstslot = getStackSlot(dst);
+    int dstoffset = -dstslot * 8;
+    out.printCode("movq $1, %r11");
+    out.printCode("subq %r11, " + inneroffset+ "(%rbp)");
+    out.printCode("movq "+  inneroffset + "(%rbp)" + dstoffset + "(%rbp)");
+  }
 }
