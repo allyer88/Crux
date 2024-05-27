@@ -71,7 +71,6 @@ public final class CodeGen extends InstVisitor {
     //Keep track of visited instructions in a set to avoid redundant visits
     //If the instruction needs a label, print the label first
     //Visit current instruction on stack, then push the next instructions onto stack
-    Boolean visited = false;
     while(i!=null){
       //If instruction has already been visited, jmp to its label instead.
       if(InstMap.containsKey(i)) {
@@ -83,9 +82,10 @@ public final class CodeGen extends InstVisitor {
           i.accept(this);
       }
       i = i.getNext(0);
-      visitBody(i,f ,count);
-      i = i.getNext(1);
-
+      visitBody(i, f ,count);Zqa
+      if(i!=null){
+        i = i.getNext(1);
+      }
     }
 
   }
