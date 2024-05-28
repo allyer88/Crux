@@ -41,7 +41,7 @@ public final class CodeGen extends InstVisitor {
       Symbol symbol = g.getSymbol();
       String name = symbol.getName();
       long size = getSize(g.getNumElement(), symbol.getType());
-      out.printCode(".comm" + name + ", " + size + ", 8" );
+      out.printCode(".comm " + name + ", " + size + ", 8" );
     }
     int count[] = new int[1];
     for(Iterator<Function> fun_it = p.getFunctions(); fun_it.hasNext();){
@@ -76,9 +76,6 @@ public final class CodeGen extends InstVisitor {
       if(InstMap.containsKey(i)) {
         out.printCode("jmp " + InstMap.get(i));
       }else {
-          HashMap<Instruction, String> var = f.assignLabels(count);
-          InstMap.putAll(var);
-          out.printCode(InstMap.get(i)+":");
           i.accept(this);
       }
       i = i.getNext(0);
@@ -216,10 +213,24 @@ public final class CodeGen extends InstVisitor {
   public void visit(CopyInst i) {
     out.printCode("/* CopyInst */");
     Variable dst = i.getDstVar();
-    Value scr = i.getSrcValue();
+    if(i.getSrcValue().getClass() == IntegerConstant.class){
+      IntegerConstant scr = (IntegerConstant)i.getSrcValue();
+      out.printCode("movq $" + scr.getValue() + ", %r10" );
+    }else if(i.getSrcValue().getClass() == BooleanConstant.class){
+      BooleanConstant scr = (BooleanConstant)i.getSrcValue();
+      int bool=0;
+      if(scr.getValue()){
+        bool =1;
+      }
+      out.printCode("movq $" + bool + ", %r10" );
+    }else{
+      Variable src = (Variable)i.getSrcValue();
+      int srcslot = getStackSlot(src);
+      int srcoffset = -srcslot * 8;
+      out.printCode("movq " + srcoffset + "(%rbp)" + ", %r10" );
+    }
     int dstslot = getStackSlot(dst);
     int dstoffset = -dstslot * 8;
-    out.printCode("movq $" + scr + ", %r10" );
     out.printCode("movq %r10, "+ dstoffset+"(%rbp)");
   }
 
@@ -290,10 +301,10 @@ public final class CodeGen extends InstVisitor {
     }
     //call func
     //func is the label of the function.
-    String func = InstMap.get(i);
+    Symbol symbol = i.getCallee();
+    String func = symbol.getName();
     out.printCode("call "+ func);
     //If the function is not void, the return value is in %rax and you should movq it into the stack.
-    Symbol symbol = i.getCallee();
     if(symbol.getType().getClass() != VoidType.class){
       LocalVar dst = i.getDst();
       int slot = getStackSlot(dst);
