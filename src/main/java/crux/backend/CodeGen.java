@@ -65,26 +65,37 @@ public final class CodeGen extends InstVisitor {
   }
 
   HashMap<Instruction, String> InstMap =new HashMap<Instruction, String>();
+  ArrayList<Instruction> inst = new ArrayList<>();
 
-  private void visitBody(Instruction i, Function f, int count[]){
+  private void visitBody(Instruction i){
     //Keep track of instructions to visit in a stack (like a DFS)
-    //Keep track of visited instructions in a set to avoid redundant visits
-    //If the instruction needs a label, print the label first
     //Visit current instruction on stack, then push the next instructions onto stack
     while(i!=null){
-      //If instruction has already been visited, jmp to its label instead.
-      if(InstMap.containsKey(i)) {
-        out.printCode("jmp " + InstMap.get(i));
+        //if it has label and is visited, jmp to its label instead.
+      if(InstMap.containsKey(i)){
+          if(inst.contains(i)) {
+              out.printCode("jmp " + InstMap.get(i));
+              return;
+          }else{
+              //if not visited but has label, print label
+              out.printLabel(InstMap.get(i)+":");
+              i.accept(this);
+              inst.add(i);
+          }
       }else {
           i.accept(this);
       }
-      i = i.getNext(0);
-      visitBody(i, f ,count);
-      if(i!=null){
-        i = i.getNext(1);
+      Instruction in= i.getNext(0);
+      if(in==null){
+        //Print epilogue
+        out.printCode("movq $0, %rax");
+        out.printCode("leave");
+        out.printCode("ret");
+        return;
       }
+      visitBody(in);
+      i = i.getNext(1);
     }
-
   }
   private void genCode(Function f, int count[]){
     //Assign labels to jump targets f.assignLabels(count);
@@ -113,11 +124,7 @@ public final class CodeGen extends InstVisitor {
     }
     //Generate code for function body
     Instruction i = f.getStart();
-    visitBody(i,f, count);
-    //Print epilogue
-    out.printCode("movq $0, %rax");
-    out.printCode("leave");
-    out.printCode("ret");
+    visitBody(i);
   }
 
   public void visit(AddressAt i) {
@@ -240,11 +247,9 @@ public final class CodeGen extends InstVisitor {
     int predslot = getStackSlot(pred);
     int predoffset = -predslot * 8;
     out.printCode("movq " + predoffset + "(%rbp), " + "%r10");
-    if(InstMap.get(i)!=null){
-      out.printCode("cmp $1, %r10");
-      String trueLabel = InstMap.get(i);
-      out.printCode("je " + trueLabel);
-    }
+    out.printCode("cmp $1, %r10");
+    String trueLabel = InstMap.get(i.getNext(1));
+    out.printCode("je " + trueLabel);
   }
 
   public void visit(LoadInst i) {
