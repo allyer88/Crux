@@ -240,9 +240,11 @@ public final class CodeGen extends InstVisitor {
     int predslot = getStackSlot(pred);
     int predoffset = -predslot * 8;
     out.printCode("movq " + predoffset + "(%rbp), " + "%r10");
-    out.printCode("cmp $1, %r10");
-    String trueLabel = InstMap.get(i);
-    out.printCode("je " + trueLabel);
+    if(InstMap.get(i)!=null){
+      out.printCode("cmp $1, %r10");
+      String trueLabel = InstMap.get(i);
+      out.printCode("je " + trueLabel);
+    }
   }
 
   public void visit(LoadInst i) {
@@ -254,7 +256,8 @@ public final class CodeGen extends InstVisitor {
     int dstslot = getStackSlot(dst);
     int dstoffset = -dstslot * 8;
     out.printCode("movq " + scroffset +"(%rbp), %r10");
-    out.printCode("movq 0(%r10), " + dstoffset + "(%rbp)");
+    out.printCode("movq 0(%r10), %r11");
+    out.printCode("movq %r11, " + dstoffset + "(%rbp)");
   }
 
   public void visit(NopInst i) {
@@ -270,7 +273,8 @@ public final class CodeGen extends InstVisitor {
     int dstslot = getStackSlot(dst);
     int dstoffset = -dstslot * 8;
     out.printCode("movq " + scroffset +"(%rbp), %r10");
-    out.printCode("movq %r10, " + dstoffset + "(%rbp)");
+    out.printCode("movq " + dstoffset + "(%rbp), %r11");
+    out.printCode("movq %r10, 0(%r11)");
   }
 
   public void visit(ReturnInst i) {
@@ -305,7 +309,8 @@ public final class CodeGen extends InstVisitor {
     String func = symbol.getName();
     out.printCode("call "+ func);
     //If the function is not void, the return value is in %rax and you should movq it into the stack.
-    if(symbol.getType().getClass() != VoidType.class){
+    FuncType funcType = (FuncType) symbol.getType();
+    if(funcType.getRet().getClass() != VoidType.class){
       LocalVar dst = i.getDst();
       int slot = getStackSlot(dst);
       int offset = -slot * 8;
