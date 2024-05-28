@@ -157,21 +157,25 @@ public final class CodeGen extends InstVisitor {
     int dstoffset = -dstslot * 8;
     int lhsoffset = -lhsslot * 8;
     int rhsoffset = -rhsslot * 8;
-    out.printCode("movq "+lhsoffset+"(%rbp), %r10");
+
     switch(i.getOperator()) {
       case Add:
+        out.printCode("movq "+lhsoffset+"(%rbp), %r10");
         out.printCode("addq "+rhsoffset+"(%rbp), %r10");
         out.printCode("movq %r10, "+ dstoffset+"(%rbp)");
         break;
       case Sub:
+        out.printCode("movq "+lhsoffset+"(%rbp), %r10");
         out.printCode("subq "+rhsoffset+"(%rbp), %r10");
         out.printCode("movq %r10, "+ dstoffset+"(%rbp)");
         break;
       case Mul:
+        out.printCode("movq "+lhsoffset+"(%rbp), %r10");
         out.printCode("imulq "+rhsoffset+"(%rbp), %r10");
         out.printCode("movq %r10, "+ dstoffset+"(%rbp)");
         break;
       case Div:
+        out.printCode("movq "+lhsoffset+"(%rbp), %rax");
         out.printCode("cqto");
         out.printCode("idivq " + rhsoffset + "(%rbp)");
         out.printCode("movq %rax, "+ dstoffset+"(%rbp)");
