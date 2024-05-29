@@ -28,19 +28,19 @@ public final class CodeGen extends InstVisitor {
   /**
    * It should allocate space for globals call genCode for each Function
    */
-  private long getSize(IntegerConstant i, Type t){
-    if(t.getClass()== IntType.class){
-      return i.getValue()*4;
-    }
-    //t.getClass() == BoolType.class
-    return i.getValue();//*1byte
-  }
   public void genCode() {
     for (Iterator<GlobalDecl> glob_it = p.getGlobals(); glob_it.hasNext();){
       GlobalDecl g = glob_it.next();
       Symbol symbol = g.getSymbol();
+      Type type;
+      if(symbol.getType().getClass() == ArrayType.class){
+        ArrayType arrayType = (ArrayType)symbol.getType();
+        type = arrayType.getBase();
+      }else{
+        type = symbol.getType();
+      }
       String name = symbol.getName();
-      long size = getSize(g.getNumElement(), symbol.getType());
+      long size = g.getNumElement().getValue() * 8;
       out.printCode(".comm " + name + ", " + size + ", 8" );
     }
     int count[] = new int[1];
@@ -88,7 +88,6 @@ public final class CodeGen extends InstVisitor {
       Instruction in= i.getNext(0);
       if(in==null){
         //Print epilogue
-        out.printCode("movq $0, %rax");
         out.printCode("leave");
         out.printCode("ret");
         return;
@@ -115,11 +114,12 @@ public final class CodeGen extends InstVisitor {
       int varSlots = getStackSlot(args.get(i));
       if(i<6){
         offset = -varSlots * 8;
-        out.printCode("movq "+ argReg.get(i) +", " + offset + "(%rbp)");
+        out.printCode("movq" + argReg.get(i)+ ", " + offset + "(%rbp)");
       }else{
         int argRegOffset = 16 * (i-5);
         offset = -varSlots * 8;
-        out.printCode("movq "+ argRegOffset + "(%rbp), " + offset + "(%rbp)");
+        out.printCode("movq "+ argRegOffset + "(%rbp), %r10");
+        out.printCode("movq %r10, " + offset + "(%rbp)");
       }
     }
     //Generate code for function body
