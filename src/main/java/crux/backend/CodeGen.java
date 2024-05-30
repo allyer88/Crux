@@ -16,7 +16,6 @@ public final class CodeGen extends InstVisitor {
   private final Program p;
   private final CodePrinter out;
   private List<String> argReg = Arrays.asList("%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9");
-
   public CodeGen(Program p) {
     this.p = p;
     // Do not change the file name that is outputted or it will
@@ -47,15 +46,13 @@ public final class CodeGen extends InstVisitor {
     for(Iterator<Function> fun_it = p.getFunctions(); fun_it.hasNext();){
       Function f = fun_it.next();
       genCode(f, count);
+      varMap.clear();
+      varcount=0;
     }
     out.close();
   }
   HashMap<Variable, Integer> varMap = new HashMap<Variable, Integer>();
   int varcount = 0;
-
-  public int numSlots() {
-    return varcount;
-  }
   Integer getStackSlot(Variable v) {
     if (!varMap.containsKey(v)) {
       varcount++;
@@ -114,9 +111,9 @@ public final class CodeGen extends InstVisitor {
       int varSlots = getStackSlot(args.get(i));
       if(i<6){
         offset = -varSlots * 8;
-        out.printCode("movq" + argReg.get(i)+ ", " + offset + "(%rbp)");
+        out.printCode("movq " + argReg.get(i)+ ", " + offset + "(%rbp)");
       }else{
-        int argRegOffset = 16 * (i-5);
+        int argRegOffset = 16 + 8* (args.size()-i);
         offset = -varSlots * 8;
         out.printCode("movq "+ argRegOffset + "(%rbp), %r10");
         out.printCode("movq %r10, " + offset + "(%rbp)");
@@ -308,8 +305,9 @@ public final class CodeGen extends InstVisitor {
       if(j<6){
         out.printCode("movq " + offset+ "(%rbp), " + argReg.get(j));
       }else{
-        int argRegOffset = 16 * (j-5);
-        out.printCode("movq "+  offset+ "(%rbp), " + argRegOffset + "(%rbp)");
+	int argRegOffset = 16 + 8* (j-6);
+  	out.printCode("movq "+ offset+ "(%rbp), %r10");
+        out.printCode("movq %r10, " + argRegOffset + "(%rbp)"); 
       }
     }
     //call func
@@ -336,7 +334,8 @@ public final class CodeGen extends InstVisitor {
     int dstslot = getStackSlot(dst);
     int dstoffset = -dstslot * 8;
     out.printCode("movq $1, %r11");
-    out.printCode("subq %r11, " + inneroffset+ "(%rbp)");
-    out.printCode("movq "+  inneroffset + "(%rbp)" + dstoffset + "(%rbp)");
+    out.printCode("movq " + inneroffset+ "(%rbp), " + "%r10");
+    out.printCode("subq %r10, %r11");
+    out.printCode("movq %r11, " + dstoffset + "(%rbp)");
   }
 }
