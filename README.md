@@ -1,3 +1,8 @@
+# Introduction
+In class CS142A, we will build a compiler which translate programs constructed from a fairly small imperative programming language into executable x86 assembly. We will follow a traditional compiler design approach of partitioning our compiler into a sequence of stages, starting with a frontend and proceeding toward a backend in incremental steps. These stages will transform the input source code progressively into executable output.
+
+
+
 ## Using Maven with IntelliJ Idea
 You can download IntelliJ Idea from Jetbrains. The community edition is free to use. We also recommend installing the ANTLR v4 grammar plugin, which brings syntax highlighting to ANTLR grammars that are used in the first assignment.
 
