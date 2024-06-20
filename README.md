@@ -1,6 +1,7 @@
 # Introduction
 In class CS142A, we will build a compiler which translate programs constructed from a fairly small imperative programming language into executable x86 assembly. We will follow a traditional compiler design approach of partitioning our compiler into a sequence of stages, starting with a frontend and proceeding toward a backend in incremental steps. These stages will transform the input source code progressively into executable output.
 
+All tests are passed.
 
 
 ## Using Maven with IntelliJ Idea
